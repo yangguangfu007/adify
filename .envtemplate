@@ -1,0 +1,14 @@
+MINIO_ENDPOINT=localhost:9000
+MINIO_ENDPOINT_PROXY=http://minio.xxx.com/minio
+MINIO_ACCESS_KEY=admin
+MINIO_SECRET_KEY=admin123
+MINIO_SECURE=False
+BUCKET_NAME=adify
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=guangfu
+DB_PASSWORD=admin123
+DB_DATABASE=adify
+
+
+
