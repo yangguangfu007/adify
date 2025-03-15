@@ -9,12 +9,14 @@ from upload.uploadfile import MinioUploader
 from datetime import datetime
 import uuid
 import traceback
+from ai_copy import gen_vieo
 
 # Create Blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 # Initialize database manager
-db_manager = DBManager(host=os.getenv("DB_HOST"), port=int(os.getenv("DB_PORT")), user=os.getenv("DB_USER"), password=os.getenv("DB_PASSWORD"),
+db_manager = DBManager(host=os.getenv("DB_HOST"), port=int(os.getenv("DB_PORT")), user=os.getenv("DB_USER"),
+                       password=os.getenv("DB_PASSWORD"),
                        database=os.getenv("DB_DATABASE"))
 minioUploader = MinioUploader(os.getenv("BUCKET_NAME"))
 
@@ -32,25 +34,48 @@ def keyframes():
         data = request.get_json()
         if not data or not data.get('video_url'):
             return jsonify({'status': 'error', 'message': '视频url为空'}), 400
-        # todo
-        keyframes = []
-        return jsonify({'status': 'success', 'message': 'ok', 'keyframes': keyframes}), 200
+
+        key_frames = gen_vieo.get_key_images(data.get('video_url'))
+        return jsonify({'status': 'success', 'message': 'ok', 'keyframes': key_frames}), 200
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @api_bp.route('/video/generate_video_segments', methods=['POST'])
 def generate_video_segments():
-    """该接口用于接收一个视频的URL和多个关键帧替换图片的URL，根据关键帧位置将视频分割为多个片段，并将每个关键帧替换为指定的图片。
-    每个关键帧替换图片的URL对应一组视频片段，每组包含3个片段。该接口可用于视频编辑、广告替换或内容定制等场景。
+    """该接口用于接收一个关键帧图片URL和一个关键帧替换图片的URL.
+    每个关键帧替换图片的URL对应一组视频片段。该接口可用于视频编辑、广告替换或内容定制等场景。
     """
     try:
         data = request.get_json()
-        if not data or not data.get('video_url') or not data.get('keyframes'):
-            return jsonify({'status': 'error', 'message': '视频url或keyframes为空'}), 400
-        results = []
-        # TODO
-        return jsonify({'status': 'success', 'message': 'ok', 'results': results}), 200
+        if not data or not data.get('prompt') or not data.get('time_len') or not data.get('image_url') or not data.get(
+                'target_image_url'):
+            return jsonify({'status': 'error', 'message': 'param error'}), 400
+
+        prompt = data.get('prompt')
+        time_len = data.get('time_len')
+        resolution = '720p'
+        movement_amplitude = 'auto'
+        aspect_ratio = '16:9'
+        image_urls = [data.get('image_url'), data.get('target_image_url')]
+        task_id = gen_vieo.gen_key_video(prompt, time_len, resolution, movement_amplitude, aspect_ratio, image_urls)
+        return jsonify({'status': 'success', 'message': 'ok',
+                        'results': ({'task_id': task_id, 'target_image_url': data.get('target_image_url')})}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@api_bp.route('/video/get_generate_video_segments', methods=['GET'])
+def get_generate_video_segments():
+    """根据task_id查询视频片段生成情况 """
+    try:
+        # 获取查询参数
+        task_id = request.args.get('task_id', default='', type=str)
+
+        if not task_id:
+            return jsonify({'status': 'error', 'message': 'task_id is required'}), 400
+        video_url = gen_vieo.get_task_id(task_id)
+        return jsonify({'status': 'success', 'message': 'ok', 'video_url': video_url, 'task_id': task_id}), 200
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
@@ -60,12 +85,13 @@ def generate_video():
     """视频生成和标题推荐接口"""
     try:
         data = request.get_json()
-        if not data or not data.get('video_fragments'):
+        if not data or not data.get('video_fragments_urls') or not data.get('product_info'):
             return jsonify({'status': 'error', 'message': 'video_fragments is null'}), 400
 
-        video = {}
-        titles = []
-        return jsonify({'status': 'success', 'message': 'ok', 'video': video, 'titles': titles}), 200
+        result = gen_vieo.merge_videos(data.get('video_fragments_urls'), data.get('product_info'))
+        merge_video_url = result['merge_video_url']
+        titles = result['titles']
+        return jsonify({'status': 'success', 'message': 'ok', 'video_url': merge_video_url, 'titles': titles}), 200
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
@@ -111,7 +137,7 @@ def video_update():
     """视频素材更新接口"""
     try:
         data = request.get_json()
-        print('data:', data)
+
         if not data or not data.get('material_id') or not data.get('deployment_links'):
             return jsonify({'status': 'error', 'message': 'video_url or preview_url or title or type is null'}), 400
 
@@ -164,6 +190,7 @@ def generate_material_id(source_type=0):
     # 生成素材 ID
     material_id = f"{prefix}{new_sequence:03d}"  # 顺序号至少3位，不足补零
     return material_id
+
 
 @api_bp.route('/video/list', methods=['GET'])
 def video_list():
@@ -223,7 +250,7 @@ def video_list():
                 "material_id": row['material_id'],
                 "title": row['title'],
                 "deployment_links": row['deployment_links'],
-                "created_at": row['created_at'].strftime('%Y-%m-%d %H:%M:%S') # 转换为 YYYY-mm-dd HH:MM:SS 格式
+                "created_at": row['created_at'].strftime('%Y-%m-%d %H:%M:%S')  # 转换为 YYYY-mm-dd HH:MM:SS 格式
             })
 
         response_data = {
@@ -275,7 +302,7 @@ def deployment_add():
 
                 # 构造一条插入记录
                 insert_data.append((
-                    comparison_group_id, material_id, link, campaign_label,is_system_preferred
+                    comparison_group_id, material_id, link, campaign_label, is_system_preferred
                 ))
 
         # 执行批量插入
@@ -418,7 +445,6 @@ def deployment_details():
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'Failed to retrieve material details: {str(e)}'}), 500
-
 
 
 @api_bp.route('/deployment/data', methods=['POST'])
