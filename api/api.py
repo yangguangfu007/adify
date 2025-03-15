@@ -38,6 +38,7 @@ def keyframes():
         key_frames = gen_vieo.get_key_images(data.get('video_url'))
         return jsonify({'status': 'success', 'message': 'ok', 'keyframes': key_frames}), 200
     except Exception as e:
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
@@ -62,6 +63,7 @@ def generate_video_segments():
         return jsonify({'status': 'success', 'message': 'ok',
                         'results': ({'task_id': task_id, 'target_image_url': data.get('target_image_url')})}), 200
     except Exception as e:
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
@@ -89,10 +91,12 @@ def generate_video():
             return jsonify({'status': 'error', 'message': 'video_fragments is null'}), 400
 
         result = gen_vieo.merge_videos(data.get('video_fragments_urls'), data.get('product_info'))
-        merge_video_url = result['merge_video_url']
+        preview_url = result['preview_url']
+        video_url = result['video_url']
         titles = result['titles']
-        return jsonify({'status': 'success', 'message': 'ok', 'video_url': merge_video_url, 'titles': titles}), 200
+        return jsonify({'status': 'success', 'message': 'ok', 'video_url': video_url, 'preview_url': preview_url,'titles': titles}), 200
     except Exception as e:
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 

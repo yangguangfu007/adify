@@ -8,7 +8,7 @@ class DBManager:
     """
     Database manager class for handling MySQL connections and operations.
     """
-    def __init__(self, host='localhost', port=0, user='root', password='', database='adify_db'):
+    def __init__(self, host='localhost', port=3306, user='root', password='', database='adify'):
         """
         Initialize the database connection parameters.
         

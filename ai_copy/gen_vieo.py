@@ -44,7 +44,6 @@ def download_video(video_url: str) -> str:
 
     return video_path
 
-
 def get_key_images(video_url: str) -> List[str]:
     """输入视频 URL，返回关键帧图片的 URL 列表"""
     try:
@@ -58,7 +57,8 @@ def get_key_images(video_url: str) -> List[str]:
         image_urls = []
         for img_name in sorted(os.listdir(video_folder_path)):
             img_path = os.path.join(video_folder_path, img_name)
-            img_url = upload_file(img_path)
+            json_data = upload_file(img_path)
+            img_url = json_data["preview_url"]
             image_urls.append(img_url)
 
         return image_urls
@@ -78,6 +78,7 @@ def gen_key_video(prompt,time_len,resolution,movement_amplitude,aspect_ratio,ima
         这里返回一个taskid,前端轮询请求
     """
     rsp = send_video_generation_request(prompt, image_urls, time_len, resolution, movement_amplitude, aspect_ratio)
+    print("rsp:", rsp)
     task_id = rsp['task_id']
     return task_id
 
@@ -94,7 +95,7 @@ def merge_videos(video_urls, product_info):
     """合并视频,返回一个视频url
     video_urls: 视频链接url列表
     """
-    # 1.先下载所有视频片段到本地,假设下载后存储在本地tmp_videos文件夹下
+    # 1.先下载所有视频片段到本地
     video_paths = []
     for video_url in video_urls:
         video_paths.append(download_video(video_url))
@@ -131,22 +132,13 @@ def merge_videos(video_urls, product_info):
     final_video_path = generate_unique_path(".mp4")
     final_clip.write_videofile(final_video_path, codec="libx264", fps=24)
     # 上传到文件服务器
-    video_url = upload_file(final_video_path)
+    json_data = upload_file(final_video_path)
     titles = get_video_title(product_info, final_video_path)
-    return {'video_url': video_url, 'titles': titles}
+    preview_url = json_data["preview_url"]
+    video_url = json_data["url"]
 
-def upload_file(file_path):
-    # 接口URL
-    url = "http://localhost:5000/api/upload/file"
+    return {'video_url': video_url, 'preview_url': preview_url, 'titles': titles}
 
-    # 读取文件并上传
-    with open(file_path, "rb") as file:
-        files = {"file": (file_path, file, "image/jpeg")}
-        response = requests.post(url, files=files)
-
-    # 打印服务器返回的响应
-    print(response.json())
-    return response.json()['preview_url']
 
 def get_video_title(product_info, video_path):
     frame_folder_path = get_key_frames(video_path)
@@ -162,5 +154,27 @@ def get_video_title(product_info, video_path):
     raw_title_res = call_multi_model_gpt(prompt, image_paths, image_mode='local_path')
     title_res = parse_json_response(raw_title_res)
     return title_res['广告标题']
+
+def upload_file(img_path):
+    from io import BytesIO
+    from flask import current_app
+
+    with open(img_path, "rb") as f:
+        file_data = f.read()
+
+    # 使用 Flask `test_client()` 直接调用 API
+    with current_app.test_client() as client:
+        response = client.post(
+            "/api/upload/file",
+            data={"file": (BytesIO(file_data), img_path.split("/")[-1])},
+            content_type="multipart/form-data"
+        )
+
+    # 确保返回的是 JSON
+    return response.get_json()
+
+
+
+
 
 
