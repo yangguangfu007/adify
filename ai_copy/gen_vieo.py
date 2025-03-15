@@ -58,7 +58,7 @@ def get_key_images(video_url: str) -> List[str]:
         image_urls = []
         for img_name in sorted(os.listdir(video_folder_path)):
             img_path = os.path.join(video_folder_path, img_name)
-            img_url = upload_img_to_url(img_path)
+            img_url = upload_file(img_path)
             image_urls.append(img_url)
 
         return image_urls
